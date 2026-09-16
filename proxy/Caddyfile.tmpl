@@ -1,0 +1,52 @@
+# Caddyfile template for a Churner environment host (design spec §7).
+#
+# `bootstrap.sh` renders this to /etc/caddy/Caddyfile, substituting:
+#   @@ROUTES_DIR@@   where the release route file lives
+#   @@SITE@@         the site address: the environment's domain, or :80
+#
+# With a domain, Caddy obtains and renews the certificate itself over ACME —
+# there is no load balancer in front of an environment host, so the challenge
+# reaches this process. Without one, the site address is the bare port `:80`,
+# which names no host a certificate could be issued to, so no ACME attempt is
+# made at all and the retry loop that would otherwise be the only thing in the
+# logs never starts.
+
+{
+	# The admin API would listen on 2019 with no authentication. Nothing here
+	# uses it: the route is a file, and a route change is applied by
+	# `systemctl reload caddy`, whose ExecReload sends SIGUSR1.
+	admin off
+}
+
+@@SITE@@ {
+	# `route`, not three bare directives, because Caddy SORTS the directives
+	# inside a site block into its own standard order — in which `respond`
+	# comes before `reverse_proxy`. Bare, the catch-all `respond` below
+	# would be an unmatched terminal handler sitting in front of the
+	# imported release route, and every request would answer 503 including
+	# after a perfectly good deploy. Inside a `route` block the order is
+	# preserved exactly as written here.
+	route {
+		# Answered by the PROXY, not by the application: this is the
+		# readiness signal for "the host is serving", which must stay true
+		# while a release is being swapped. The application's own health is
+		# the release script's business, and it polls the application port
+		# directly.
+		respond /healthz 200
+
+		# One file, rewritten by `deploy-release.sh` once a release has
+		# passed its health gate:
+		#
+		#   # @@ROUTES_DIR@@/release.caddy
+		#   reverse_proxy 127.0.0.1:28080
+		#
+		# It carries no matcher, so it terminates the route before the
+		# fallback below — which is what makes that fallback mean "no
+		# release yet" rather than "always".
+		import @@ROUTES_DIR@@/*.caddy
+
+		# Steady state before the first release, and what a request gets if
+		# the route file is ever missing.
+		respond "No release is running yet." 503
+	}
+}
