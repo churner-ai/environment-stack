@@ -277,21 +277,19 @@ and would silently do nothing.
 
 ## Tearing it down
 
-The database (when created) has no deletion protection and no
-`skip_final_snapshot`/backups guarantee beyond what you configure — check
-your renderer's defaults before relying on either. Two things do not
-disappear cleanly:
+The database (when created) has no deletion protection, but it does take a
+final snapshot: CloudFormation renders `DeletionPolicy`/`UpdateReplacePolicy`
+`Snapshot`, and Terraform `skip_final_snapshot = false`. Three things
+therefore do not disappear with the stack:
 
-- **The database secret.** Terraform sets `recovery_window_in_days = 0`, so
-  it is deleted immediately. **CloudFormation does not** — the secret enters
-  a 30-day recovery window still holding its name, and a re-apply within
-  that window fails with "a secret with this name is scheduled for
-  deletion". Force it first:
-
-  ```
-  aws secretsmanager delete-secret \
-    --secret-id <secretsPrefix>/environment-db --force-delete-without-recovery
-  ```
-
+- **The final DB snapshot**, which is the point of the policy above. Delete
+  it by hand once you are sure you no longer want the data.
 - **The ECR repository** refuses to delete while it holds images. Empty it,
   or delete it with `--force`.
+- **The S3 bucket** refuses the same way while it holds objects.
+
+There is no customer-named database secret to clean up: the master
+credential is RDS-MANAGED (`ManageMasterUserPassword` /
+`manage_master_user_password`), so RDS owns that secret's lifecycle and
+removes it with the instance. The environment's `secretsPrefix` holds only
+the application secrets you put there yourself.
