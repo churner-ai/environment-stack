@@ -38,7 +38,10 @@
 #   - `$CHURNER_ROUTES_DIR`, the directory the release workflow's host script
 #     (`deploy-release.sh`) drops one route file into per release;
 #   - the CloudWatch agent, so the release container's logs reach
-#     `$CHURNER_LOG_GROUP`.
+#     `$CHURNER_LOG_GROUP`;
+#   - the Postgres client and `python3`, which the stack's own
+#     `Custom::ChurnerDbRoles` command runs ON THIS HOST to create Churner's
+#     database login (`DB_ROLES_HOST_PACKAGES`, see the Packages section).
 #
 # Written for bash 3.2 (no associative arrays, no `mapfile`, no `${x^^}`) so
 # `bash -n` on a developer's macOS is the same check CI runs — the same rule
@@ -194,6 +197,31 @@ log "bootstrapping ${ENVIRONMENT} environment host for ${PROJECT_KEY}"
 
 log "installing packages"
 dnf install -y docker tar gzip jq awscli-2 aws-cfn-bootstrap amazon-cloudwatch-agent
+
+# The database-login packages, on a line of their own because the client has
+# two possible names and a whole-list retry would reinstall the six above to
+# find that out.
+#
+# THIS HOST is where the stack's `Custom::ChurnerDbRoles` command runs — the
+# environment owns its database and its host role already holds a permanent
+# read of the master secret, so the roles command targets it rather than the
+# project's reach instance. That command runs `psql` and parses the secret
+# with `python3`. Until 2026-09-18 neither was installed here, and both roles
+# resources failed with `psql: command not found` — rolling back an apply
+# that had already built two databases and two hosts.
+#
+# The list is DECLARED ONCE, in `shared/access/db-roles-host.ts`
+# (`DB_ROLES_HOST_PACKAGES`), which the reach instance's bootstrap renders
+# from and which a test in `shared/tests/environment-stack.test.ts` asserts
+# against these two lines verbatim — a shell file cannot import, so the test
+# is what keeps the two copies from drifting.
+#
+# `set -e` is on, so both names failing stops the script here and the EXIT
+# trap signals CloudFormation with the failure. That is the loud posture the
+# reach bootstrap takes for the same packages: a host that comes up without
+# `psql` fails later, somewhere else, about something else.
+dnf install -y postgresql16 python3 ||
+  dnf install -y postgresql15 python3
 
 systemctl enable --now docker
 systemctl enable --now amazon-ssm-agent

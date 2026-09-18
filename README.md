@@ -119,9 +119,9 @@ pinned and verified:
 
 - `ENVIRONMENT_SCRIPTS_BASE_URL` (baked into the rendered UserData — unlike
   the preview stack, this module exposes no customer-facing stack parameter
-  for it) points at a **tag** (`refs/tags/v1`) on the public
+  for it) points at a **tag** (`refs/tags/v1.2`) on the public
   [`churner-ai/environment-stack`](https://github.com/churner-ai/environment-stack)
-  repository, never a branch. Tags there are IMMUTABLE once published — `v1`
+  repository, never a branch. Tags there are IMMUTABLE once published — each
   goes on serving exactly the bytes this module's renderer pins, forever; a
   script change cuts a NEW tag rather than re-pointing an old one, so the
   pinned digest and the tag it names can never disagree. The host fetches
@@ -200,11 +200,13 @@ the workflow itself. A tag cut without them 404s on every `cut-rc`,
 `promote` and `rollback`, and the failure points at the customer's host
 rather than at the release.
 
-**The tag currently in effect, `refs/tags/v1` on `churner-ai/environment-stack`,
+**The tag currently in effect, `refs/tags/v1.2` on `churner-ai/environment-stack`,
 must be cut from a release whose `bootstrap.sh` hashes to the
 `ENVIRONMENT_BOOTSTRAP_SHA256` the renderer ships.** Tags on this repository
 are IMMUTABLE — never re-cut, never moved — so a script change cuts the
-NEXT tag (`v2`, then `v3`, ...) instead. Skip the release entirely and the
+NEXT tag (`v1.3`, then `v1.4`, ...) instead. `v1.2` is the first tag whose
+`bootstrap.sh` installs the Postgres client the stack's database-roles
+command needs; `v1` and `v1.1` serve a host that cannot create the login. Skip the release entirely and the
 failure is silent in the worst way — a host fetches the tag its module
 names, its digest does not match, and every new environment host refuses to
 bootstrap until someone cuts a release.

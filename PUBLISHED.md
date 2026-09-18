@@ -23,4 +23,4 @@ fetches is verified against a SHA-256 the customer can read in their own
 rendered stack and workflow, so the repository being public is not what makes
 the bytes trustworthy; the digests are.
 
-Released from churner monorepo commit `f75e189`.
+Released from churner monorepo commit `bd29e3e`.
